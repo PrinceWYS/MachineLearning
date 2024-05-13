@@ -1,49 +1,164 @@
-# implete SVMs; solved in both the primal and the dual; You are allowed to use any off-the-shelf toolbox to solve the resulting Quadratic Programming problem. Do keep it in mind, though, you are not allowed to call existing SVM toolboxes/APIs.
+# You need to implement SVMs; 
+# solved in both the primal and the dual. 
+# Your task is to implement the main algorithm of SVMs. 
+# You are allowed to use any off-the-shelf toolbox to solve the resulting Quadratic Programming problem. 
+# Do keep it in mind, though, you are not allowed to call existing SVM toolboxes/APIs.
 import numpy as np
-
+from tqdm import tqdm
 class SVM:
-    def __init__(self, max_iter=1000, C=1.0, tol=1e-3, kernel='linear'):
-        self.max_iter = max_iter    # Maximum number of iterations
-        self.C = C                  # Regularization parameter
-        self.tol = tol              # Tolerance
-        self.kernel = kernel        # Kernel type
-        self.alpha = None           # Lagrange multipliers
-        self.b = None               # Bias
-        self.support_vectors = None # Support vectors
-        self.support_vector_labels = None   # Labels of support vectors
-        self.kernel_cache = None    # Cache for kernel values
-        
-    def fit(self, X, y):
-        n_samples, n_features = X.shape
-        
-        # Initialize kernel cache
-        self.kernel_cache = np.zeros((n_samples, n_samples))
-        for i in range(n_samples):
-            for j in range(i, n_samples):
-                self.kernel_cache[i, j] = self.kernel_function(X[i], X[j])
-                self.kernel_cache[j, i] = self.kernel_cache[i, j]
-        
-        # Initialize alpha
+    def __init__(self, X, y, kernel='linear', C=1.0, tol=1e-3, max_iter=1000):
+        self.X = np.array(X)
+        self.y = np.array(y)
+        self.kernel = kernel
+        self.C = C       
+        self.tol = tol
+        self.max_iter = max_iter
+    
+        n_samples, n_features = len(X), len(X[0])
+        self.n_samples = n_samples
+        self.n_features = n_features
         self.alpha = np.zeros(n_samples)
+        self.b = 0.0
+        self.w = np.zeros(n_features)
+        self.kernel_matrix = np.zeros((n_samples, n_samples))
+        self.E = np.zeros(n_samples)
+    
+    def kernel_function(self, x1, x2):
+        if self.kernel == 'linear':
+            return np.dot(x1.T, x2)
+        elif self.kernel == 'rbf':
+            return np.exp(-np.linalg.norm(x1 - x2) ** 2 / (2 * self.sigma ** 2))
+        else:
+            raise ValueError('Invalid kernel')
+    
+    def ktt(self, i):
+        Ei = self._E(i)
+        if (self.y[i] * Ei < -self.tol and self.alpha[i] < self.C) or (self.y[i] * Ei > self.tol and self.alpha[i] > 0):
+            return True
+        else:
+            return False
+    
+    def inner_loop(self, i):
+        Ei = self._E(i)
+        max_diff = 0
+        j = None
+        E = np.nonzero(self.E)[0]
+        if len(E) > 1:
+            for k in E:
+                if k == i:
+                    continue
+                Ek = self._E(k)
+                diff = np.abs(Ei - Ek)
+                if diff > max_diff:
+                    max_diff = diff
+                    j = k
+        else:
+            j = i
+            while j == i:
+                j = int(np.random.uniform(0, self.n_samples))
         
-        # SMO algorithm
-        for _ in range(self.max_iter):
+        return j
+
+    def update(self, i, j):
+        alpha_i_old = self.alpha[i]
+        alpha_j_old = self.alpha[j]
+        
+        if self.y[i] != self.y[j]:
+            L = max(0, self.alpha[j] - self.alpha[i])
+            H = min(self.C, self.C + self.alpha[j] - self.alpha[i])
+        else:
+            L = max(0, self.alpha[j] + self.alpha[i] - self.C)
+            H = min(self.C, self.alpha[j] + self.alpha[i])
+
+        if L == H:
+            return 0
+        eta = self.kernel_matrix[i, i] + self.kernel_matrix[j, j] - 2 * self.kernel_matrix[i, j]
+        if eta <= 0:
+            return 0
+        
+        def clip_bonder(alpha_new_unc, L, H):
+            if alpha_new_unc < L:
+                return L
+            elif alpha_new_unc > H:
+                return H
+            else:
+                return alpha_new_unc
+        alpha_j_new_unc = alpha_j_old + self.y[j] * (self.E[i] - self.E[j]) / eta
+        alpha_j_new = clip_bonder(alpha_j_new_unc, L, H)
+        alpha_i_new = alpha_i_old + self.y[i] * self.y[j] * (alpha_j_old - alpha_j_new)
+        # update alpha
+        self.alpha[i] = alpha_i_new
+        self.alpha[j] = alpha_j_new
+        # update b
+        b1 = self.b - self.E[i] - self.y[i] * (alpha_i_new - alpha_i_old) * self.kernel_matrix[i, i] - self.y[j] * (alpha_j_new - alpha_j_old) * self.kernel_matrix[i, j]
+        b2 = self.b - self.E[j] - self.y[i] * (alpha_i_new - alpha_i_old) * self.kernel_matrix[i, j] - self.y[j] * (alpha_j_new - alpha_j_old) * self.kernel_matrix[j, j]
+        
+        if 0 < alpha_i_new < self.C:
+            self.b = b1
+        elif 0 < alpha_j_new < self.C:
+            self.b = b2
+        else:
+            self.b = (b1 + b2) / 2
+        # update E
+        self.E[i] = self._E(i)
+        self.E[j] = self._E(j)
+        
+        return 1
+        
+    
+    def fit(self):
+        # n_samples, n_features = len(self.X), len(self.X[0])
+        n_samples, n_features = self.X.shape
+        self.kernel_matrix = np.zeros((n_samples, n_samples))
+        
+        for i in range(n_samples):
+            for j in range(n_samples):
+                self.kernel_matrix[i, j] = self.kernel_function(self.X[i], self.X[j])
+        
+        for _ in tqdm(range(self.max_iter)):
             alpha_prev = np.copy(self.alpha)
             for i in range(n_samples):
-                j = self.random_index(i, n_samples)
-                if self.update_alpha(i, j, X, y):
-                    break
-            if np.linalg.norm(self.alpha - alpha_prev) < self.tol:
-                break
+                if self.ktt(i):
+                    j = self.inner_loop(i)
+                    self.update(i, j)
+        self.w = self._W(self.alpha, self.X, self.y)
+        print(f'[INFO] Training finished. W: {self.w},\n b: {self.b},\n alpha: {self.alpha}')
+        return self.w, self.b, self.alpha
+    
+    def predict(self, X, y=None):
+        sum = 0
+        # total = len(X)
+        X = np.array(X)
+        total = X.shape[0]
         
-        # Compute bias
-        self.b = 0
-        for i in range(n_samples):
-            self.b += y[i]
-            for j in range(n_samples):
-                self.b -= self.alpha[j] * y[j] * self.kernel_cache[i, j]
-        self.b /= n_samples
+        for i in range(total):
+            res = np.dot(self.w.T, X[i, :]) + self.b
+            res = np.sign(res)
+            if y is not None:
+                if res == y[i]:
+                    sum += 1
         
-        # Get support vectors
-        self.support_vectors = X[self.alpha > 1e-5]
-        self.support_vector_labels = y[self.alpha > 1e-5]
+        if y is not None:
+            print(f'[INFO] Accuracy: {sum / total}')
+        else:
+            print(f'[INFO] Cannot calculate accuracy without y_true.')
+                        
+    
+    def _g(self, i):
+        sum = self.b
+        for j in range(self.n_samples):
+            sum += self.alpha[j] * self.y[j] * self.kernel_matrix[i, j]
+        
+        return sum
+
+    def _E(self, i):
+        return self._g(i) - self.y[i]
+    
+    def _W(self, alpha, X, y):
+        m, n = X.shape
+        w = np.zeros((n, 1))
+        for i in range(n):
+            for j in range(m):
+                w[i] += alpha[j] * y[j] * X[j, i]
+            
+        return w
