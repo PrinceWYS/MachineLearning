@@ -30,6 +30,7 @@ def test_libsvm(X_train, Y_train, X_test, Y_test):
     print(model.nSV)
     
 def test_my_svm(X_train, Y_train, X_test, Y_test):
+    print(f'[INFO] Testing my own SVM...')
     model = SVM.SVM(X_train, Y_train)
     model.fit()
     model.predict(X_test, Y_test)
@@ -52,4 +53,4 @@ if __name__ == '__main__':
     # test my own SVM
     test_my_svm(X_train, Y_train, X_test, Y_test)
     # test libsvm
-    # test_libsvm(X_train, Y_train, X_test, Y_test)
+    test_libsvm(X_train, Y_train, X_test, Y_test)

@@ -1,8 +1,3 @@
-# You need to implement SVMs; 
-# solved in both the primal and the dual. 
-# Your task is to implement the main algorithm of SVMs. 
-# You are allowed to use any off-the-shelf toolbox to solve the resulting Quadratic Programming problem. 
-# Do keep it in mind, though, you are not allowed to call existing SVM toolboxes/APIs.
 import numpy as np
 from tqdm import tqdm
 class SVM:
@@ -104,7 +99,6 @@ class SVM:
         self.E[j] = self._E(j)
         
         return 1
-        
     
     def fit(self):
         # n_samples, n_features = len(self.X), len(self.X[0])
@@ -114,6 +108,7 @@ class SVM:
         for i in range(n_samples):
             for j in range(n_samples):
                 self.kernel_matrix[i, j] = self.kernel_function(self.X[i], self.X[j])
+        # self.kernel_matrix = np.array([[self.kernel_function(self.X[i], self.X[j]) for j in range(self.n_samples)] for i in range(self.n_samples)])
         
         for _ in tqdm(range(self.max_iter)):
             alpha_prev = np.copy(self.alpha)
@@ -124,7 +119,8 @@ class SVM:
         self.w = self._W(self.alpha, self.X, self.y)
         print(f'[INFO] Training finished. W: {self.w},\n b: {self.b},\n alpha: {self.alpha}')
         return self.w, self.b, self.alpha
-    
+      
+
     def predict(self, X, y=None):
         sum = 0
         # total = len(X)
@@ -143,22 +139,11 @@ class SVM:
         else:
             print(f'[INFO] Cannot calculate accuracy without y_true.')
                         
-    
     def _g(self, i):
-        sum = self.b
-        for j in range(self.n_samples):
-            sum += self.alpha[j] * self.y[j] * self.kernel_matrix[i, j]
-        
-        return sum
+        return self.b + np.sum(self.alpha * self.y * self.kernel_matrix[i])
 
     def _E(self, i):
         return self._g(i) - self.y[i]
-    
+
     def _W(self, alpha, X, y):
-        m, n = X.shape
-        w = np.zeros((n, 1))
-        for i in range(n):
-            for j in range(m):
-                w[i] += alpha[j] * y[j] * X[j, i]
-            
-        return w
+        return np.dot(X.T, alpha * y)
