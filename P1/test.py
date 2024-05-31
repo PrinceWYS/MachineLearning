@@ -1,5 +1,6 @@
 import argparse
 import pickle
+import time
 from libsvm.svmutil import *
 import SVM
 
@@ -22,18 +23,25 @@ def load_data(data_path):
     return X, Y
 
 def test_libsvm(X_train, Y_train, X_test, Y_test):
+    start_time = time.time()
     prob = svm_problem(Y_train, X_train)
     param = svm_parameter('-t 0 -b 1 -q')
     model = svm_train(prob, param)
     p_label, p_acc, p_val = svm_predict(Y_test, X_test, model)
     print(f'[INFO] Accuracy: {p_acc[0]}%, MSE: {p_acc[1]}, SCC: {p_acc[2]}')
     print(model.nSV)
+    print(f'[INFO] Labels of libsvm:\n{p_label}')
+    end_time = time.time()
+    print(f'[INFO] Time cost: {end_time - start_time}s')
     
 def test_my_svm(X_train, Y_train, X_test, Y_test):
+    start_time = time.time()
     print(f'[INFO] Testing my own SVM...')
     model = SVM.SVM(X_train, Y_train)
     model.fit()
     model.predict(X_test, Y_test)
+    end_time = time.time()
+    print(f'[INFO] Time cost: {end_time - start_time}s')
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
@@ -54,3 +62,4 @@ if __name__ == '__main__':
     test_my_svm(X_train, Y_train, X_test, Y_test)
     # test libsvm
     test_libsvm(X_train, Y_train, X_test, Y_test)
+    print(f'[INFO] Label of test:\n{Y_test}')

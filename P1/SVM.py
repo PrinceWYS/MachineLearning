@@ -126,16 +126,19 @@ class SVM:
         # total = len(X)
         X = np.array(X)
         total = X.shape[0]
+        pred_y = []
         
         for i in range(total):
             res = np.dot(self.w.T, X[i, :]) + self.b
             res = np.sign(res)
+            pred_y.append(res)
             if y is not None:
                 if res == y[i]:
                     sum += 1
         
         if y is not None:
             print(f'[INFO] Accuracy: {sum / total}')
+            print(f'[INFO] label of test:\n{pred_y}')
         else:
             print(f'[INFO] Cannot calculate accuracy without y_true.')
                         
